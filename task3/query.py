@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
 """
-Blebox Erasmus Staj Mülakatı — Görev 3
-CSV dosyasından:
-  1. Verilen timestamp için sıcaklık (gerekirse interpolasyon ile)
-  2. Verilen zaman aralığında yağmur yüzdesi
+Blebox Erasmus Internship — Task 3
+Reads the CSV file produced by Task 1 and provides:
+  1. Temperature at a given timestamp (with linear interpolation if needed)
+  2. Rain percentage over a given time range
 """
 
 import sys
 import csv
 from datetime import datetime
 
+# ─── Constants ──────────────────────────────────────────────────────────────
+CSV_FILE  = "../task1/data.csv"
+DT_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-# ─── Sabitler ───────────────────────────────────────────────────────────────
-CSV_FILE    = "../task1/data.csv"          # Görev 1'in ürettiği CSV
-DT_FORMAT   = "%Y-%m-%d %H:%M:%S"         # CSV'deki tarih formatı
 
-
-# ─── CSV Okuma ───────────────────────────────────────────────────────────────
+# ─── CSV Loading ─────────────────────────────────────────────────────────────
 def load_csv(filepath: str) -> list[dict]:
-    """CSV dosyasını okur, her satırı dict olarak döner."""
+    """Reads the CSV file and returns a list of records sorted by time."""
     records = []
     with open(filepath, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -28,36 +27,34 @@ def load_csv(filepath: str) -> list[dict]:
                 "temperature": float(row["temperature"]),
                 "rain":        int(row["rain"])
             })
-    # Zaman sırasına göre sırala (güvenlik için)
     records.sort(key=lambda r: r["dt"])
     return records
 
 
-# ─── Görev 3a: Sıcaklık Sorgusu (interpolasyon) ─────────────────────────────
+# ─── Task 3a: Temperature Query (with interpolation) ────────────────────────
 def get_temperature(records: list[dict], query_dt: datetime) -> float:
     """
-    Verilen timestamp için sıcaklığı döner.
-    Tam eşleşme yoksa doğrusal interpolasyon (linear interpolation) yapar.
+    Returns the temperature at the given timestamp.
+    If no exact match exists, uses linear interpolation between
+    the nearest preceding and following records.
     """
-    # Tam eşleşme var mı?
+    # Exact match
     for r in records:
         if r["dt"] == query_dt:
             return r["temperature"]
 
-    # Sorgu zamanından önce ve sonra en yakın kayıtları bul
     before = [r for r in records if r["dt"] < query_dt]
     after  = [r for r in records if r["dt"] > query_dt]
 
     if not before:
-        raise ValueError(f"Sorgu zamanı ({query_dt}) veri setinin başından önce.")
+        raise ValueError(f"Query time ({query_dt}) is before the dataset start.")
     if not after:
-        raise ValueError(f"Sorgu zamanı ({query_dt}) veri setinin sonundan sonra.")
+        raise ValueError(f"Query time ({query_dt}) is after the dataset end.")
 
-    r0 = before[-1]   # Hemen önceki kayıt
-    r1 = after[0]     # Hemen sonraki kayıt
+    r0 = before[-1]
+    r1 = after[0]
 
-    # Doğrusal interpolasyon formülü:
-    # T = T0 + (T1 - T0) * (t - t0) / (t1 - t0)
+    # Linear interpolation: T = T0 + (T1 - T0) * (t - t0) / (t1 - t0)
     t0 = r0["dt"].timestamp()
     t1 = r1["dt"].timestamp()
     t  = query_dt.timestamp()
@@ -67,36 +64,34 @@ def get_temperature(records: list[dict], query_dt: datetime) -> float:
     return round(interpolated, 2)
 
 
-# ─── Görev 3b: Yağmur Yüzdesi ────────────────────────────────────────────────
+# ─── Task 3b: Rain Percentage ────────────────────────────────────────────────
 def get_rain_percentage(records: list[dict], start_dt: datetime, end_dt: datetime) -> float:
     """
-    Verilen zaman aralığındaki kayıtlarda yağmur yağma yüzdesini döner.
+    Returns the percentage of time it was raining within the given range.
     """
-    # Aralıktaki kayıtları filtrele (başlangıç ve bitiş dahil)
     in_range = [r for r in records if start_dt <= r["dt"] <= end_dt]
 
     if not in_range:
-        raise ValueError(f"Belirtilen aralıkta ({start_dt} — {end_dt}) kayıt bulunamadı.")
+        raise ValueError(f"No records found between {start_dt} and {end_dt}.")
 
     rain_count = sum(1 for r in in_range if r["rain"] == 1)
-    percentage = (rain_count / len(in_range)) * 100
-    return round(percentage, 1)
+    return round((rain_count / len(in_range)) * 100, 1)
 
 
-# ─── Kullanım Kılavuzu ────────────────────────────────────────────────────────
+# ─── Usage ───────────────────────────────────────────────────────────────────
 def print_usage():
     print("""
-Kullanım:
+Usage:
 
-  Sıcaklık sorgusu:
+  Temperature query:
     python3 query.py temp "2026-03-22 00:40:00"
 
-  Yağmur yüzdesi:
+  Rain percentage:
     python3 query.py rain "2026-03-22 00:35:00" "2026-03-22 00:45:00"
 """)
 
 
-# ─── Ana Program ─────────────────────────────────────────────────────────────
+# ─── Main ────────────────────────────────────────────────────────────────────
 def main():
     if len(sys.argv) < 3:
         print_usage()
@@ -108,20 +103,20 @@ def main():
     if command == "temp":
         query_dt = datetime.strptime(sys.argv[2], DT_FORMAT)
         temp = get_temperature(records, query_dt)
-        print(f"Sıcaklık [{sys.argv[2]}]: {temp}°C")
+        print(f"Temperature [{sys.argv[2]}]: {temp}°C")
 
     elif command == "rain":
         if len(sys.argv) < 4:
-            print("Hata: 'rain' komutu için başlangıç ve bitiş zamanı gerekli.")
+            print("Error: 'rain' command requires start and end timestamps.")
             print_usage()
             sys.exit(1)
         start_dt = datetime.strptime(sys.argv[2], DT_FORMAT)
         end_dt   = datetime.strptime(sys.argv[3], DT_FORMAT)
         pct = get_rain_percentage(records, start_dt, end_dt)
-        print(f"Yağmur yüzdesi [{sys.argv[2]} — {sys.argv[3]}]: %{pct}")
+        print(f"Rain percentage [{sys.argv[2]} — {sys.argv[3]}]: {pct}%")
 
     else:
-        print(f"Bilinmeyen komut: '{command}'")
+        print(f"Unknown command: '{command}'")
         print_usage()
         sys.exit(1)
 
